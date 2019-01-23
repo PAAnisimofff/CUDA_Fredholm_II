@@ -10,7 +10,7 @@
 
 #define a 0.0
 #define b 1.0
-#define n 100
+#define n 50
 //double K(double x, double y)
 //{
 //	return x * y;
@@ -233,7 +233,7 @@ int main()
 	cudaStat2 = cudaMalloc((void**)&d_tau, sizeof(double)*n);
 
 	cudaEvent_t start, stop;
-	double time;
+	float time;
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 	int N_threads = 32;
@@ -273,23 +273,12 @@ int main()
 		hx_int[i] = x;
 		i++;
 	}
-	//printf("x[%d]= %f  x[%d]= %f\n", 0, x_h[0], n - 1, x_h[n - 1]);
-	/*for (i = 0; i < n; i++)
-	{
-		printf("x[%d]= %f\n ", i, x_h[i]);
-	}
-	printf("\n");*/
-	//for (i = 0; i < n; i++)
-	//	h_x0[i] = 1;
-	/*for (int i = 0; i < m; i++)
-		for (int j = 0; j < m; j++)
-			h_A[j * m + i] = 0;*/
-	/*double eps = 1;
-	int k = 0;*/
-	//cudaMemcpy(x_d, x_h, sizeof(double)*n, cudaMemcpyHostToDevice); //сетка
+
+	cudaEventRecord(start, 0);
 	cudaMemcpy(dx_int, hx_int, sizeof(double)*n, cudaMemcpyHostToDevice); //сетка интеграла
 	//cudaMemcpy(d_x0, h_x0, sizeof(double)*n, cudaMemcpyHostToDevice); //начальное приближение
 	//Kernel launch
+	
 	createMatrix << <blocksPerGrid, threadsPerBlock >> > (d_A, dx_int, n);
 	create_F << <blocks, blockSize >> > (dx_int, f_d, n);
 	cudaStat1 = cudaMemcpy(h_A, d_A, size, cudaMemcpyDeviceToHost);
@@ -335,6 +324,18 @@ int main()
 	assert(cudaSuccess == cudaStat1);
 
 	cudaMemcpy(f_d, f_h, sizeof(double)*n, cudaMemcpyHostToDevice);
+	
+
+
+
+
+	
+	_resolution << <blocks, blockSize >> > (dx_int, f_d, x_d, n);
+	cudaMemcpy(x_h, x_d, sizeof(double)*n, cudaMemcpyDeviceToHost);
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&time, start, stop);
+	printf("\nGPU calculation time %f msec\n", time);
 	double err = 0, err_f = 0;
 	double sum = 0;
 	//printf("\t Matrix A: \n");
@@ -347,15 +348,15 @@ int main()
 			//cudaMemcpy(&sum_h, sum_d, sizeof(double), cudaMemcpyDeviceToHost);
 			//h_A[j * m + i] = sum_h / n;
 			err += (1.0 / (3 + i + j) - 1.0 / ((3 + i)*(3 + j))) - h_A[j * m + i];
-			if(j!=i) sum += abs(h_A[j*m + i] / h_A[i*m + i]);
-		//	printf("%f   ", h_A[j*m + i]);
-			//sum_h = 0.0;
-			//cudaMemcpy(sum_d, &sum_h, sizeof(double), cudaMemcpyHostToDevice);
-			//cudaMemcpy(x_d, x_h, sizeof(double)*n, cudaMemcpyHostToDevice);
-			//calc << <blocks, blockSize >> > (x_d, n, sum_d, i, j + 2);
-			//cudaMemcpy(&sum_h, sum_d, sizeof(double), cudaMemcpyDeviceToHost);
+			if (j != i) sum += abs(h_A[j*m + i] / h_A[i*m + i]);
+			//	printf("%f   ", h_A[j*m + i]);
+				//sum_h = 0.0;
+				//cudaMemcpy(sum_d, &sum_h, sizeof(double), cudaMemcpyHostToDevice);
+				//cudaMemcpy(x_d, x_h, sizeof(double)*n, cudaMemcpyHostToDevice);
+				//calc << <blocks, blockSize >> > (x_d, n, sum_d, i, j + 2);
+				//cudaMemcpy(&sum_h, sum_d, sizeof(double), cudaMemcpyDeviceToHost);
 		}
-	//	printf("\n");
+		//	printf("\n");
 	}
 	//printf("norm= %f\n", sum);
 	//printf("\t Right part: \n");
@@ -364,34 +365,10 @@ int main()
 	printf("\t Error\n");
 	//printf("error= %f\nerror_f= %f\n", err / n / n, err_f / n);
 	printf("Error= %f\n", err_f / n);
-	//cudaEventRecord(start, 0);
-	//while (eps > EPS)
-	//{
-	//	k++;
-	//	cudaMemcpy(d_delta, h_delta, sizeof(double)*n, cudaMemcpyHostToDevice);
-	//	//Solve << <blocks, blockSize >> > (d_A, f_d, d_x0, d_x1, n);
-	//	KernelJacobi << <blocks, blockSize >> > (d_A, f_d, d_x0, d_x1, n);
-	//	EpsJacobi << <blocks, blockSize >> > (d_x0, d_x1, d_delta, n);
-	//	cudaMemcpy(h_delta, d_delta, sizeof(double)*n, cudaMemcpyDeviceToHost);
-	//	eps = 0;
-	//	for (j = 0; j < n; j++)
-	//	{
-	//		eps += h_delta[j];
-	//		h_delta[j] = 0;
-	//	}
-
-	//	eps /= n;
-	//	//printf("\n Eps[%d]=%f\n ", k, eps);
-	//}
-	//cudaMemcpy(h_x1, d_x0, sizeof(double)*n, cudaMemcpyDeviceToHost);
-	for (i = 0; i < n; i++)
-		//printf("x[%d]= %f\n", i, xc[i]);
-	_resolution << <blocks, blockSize >> > (dx_int, f_d, x_d, n);
-	cudaMemcpy(x_h, x_d, sizeof(double)*n, cudaMemcpyDeviceToHost);
 	/*cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);*/	for (i = 0; i < n; i++)
-		printf("%f\n", x_h[i]);
+		//printf("%f\n", x_h[i]);
 	//printf("result=%f\n", sum_h / n);
 	//cudaFree(sum_d);
 	cudaFree(x_d);
